@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>기억력 테스트: 짝 맞추기 게임</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Nanum Gothic -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tone.js for dynamic, high-quality audio effects without externaㅁl assets -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', 'Nanum Gothic', sans-serif;
+            background: radial-gradient(circle at center, #1e1b4b 0%, #0f172a 100%);
+        }
+        .card-container {
+            perspective: 1000px;
+        }
+        .card-inner {
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+        }
+        .card-flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-front, .card-back {
+            backface-visibility: hidden;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 1rem;
+        }
+        .card-front {
+            transform: rotateY(180deg);
+        }
+        /* Custom scrollbar for high scores */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4f46e5;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col items-center justify-between p-4 overflow-x-hidden">
+
+    <!-- Header/Nav -->
+    <header class="w-full max-w-4xl flex flex-col md:flex-row justify-between items-center gap-4 py-4 border-b border-indigo-950/50 mb-4">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-2.5 rounded-2xl shadow-lg shadow-indigo-500/30 animate-pulse">
+                <i class="fa-solid fa-brain text-2xl text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-black bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">기억력 매칭 마스터</h1>
+                <p class="text-xs text-indigo-300">동일한 쌍의 카드를 최대한 빨리 찾아보세요!</p>
+            </div>
+        </div>
+        
+        <!-- Scoreboard Info -->
+        <div class="flex flex-wrap items-center gap-3 bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-indigo-950/80 shadow-inner">
+            <div class="text-center px-3 border-r border-indigo-950/40">
+                <span class="block text-[10px] text-indigo-400 font-bold uppercase tracking-wider">시간</span>
+                <span id="timer" class="text-xl font-mono font-bold text-emerald-400">00:00</span>
+            </div>
+            <div class="text-center px-3 border-r border-indigo-950/40">
+                <span class="block text-[10px] text-indigo-400 font-bold uppercase tracking-wider">이동 횟수</span>
+                <span id="moves" class="text-xl font-mono font-bold text-amber-400">0</span>
+            </div>
+            <div class="text-center px-3 border-r border-indigo-950/40">
+                <span class="block text-[10px] text-indigo-400 font-bold uppercase tracking-wider">매칭 수</span>
+                <span id="score" class="text-xl font-mono font-bold text-pink-400">0/0</span>
+            </div>
+            <div class="text-center px-2">
+                <span class="block text-[10px] text-indigo-400 font-bold uppercase tracking-wider">연속 콤보</span>
+                <span id="combo" class="text-xl font-mono font-bold text-cyan-400">0🔥</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Game Controls & Main Layout -->
+    <main class="w-full max-w-4xl flex flex-col lg:flex-row gap-6 items-stretch flex-grow my-2">
+        <!-- Sidebar Controls -->
+        <div class="w-full lg:w-1/4 flex flex-col gap-4">
+            <!-- Game Setup Card -->
+            <div class="bg-slate-900/60 backdrop-blur-md p-5 rounded-2xl border border-indigo-950/60 shadow-xl flex flex-col gap-4">
+                <h3 class="text-sm font-bold text-indigo-300 border-b border-indigo-950/40 pb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-indigo-400"></i> 게임 설정
+                </h3>
+                
+                <!-- Theme Select -->
+                <div>
+                    <label class="block text-xs text-indigo-200 mb-1 font-semibold">카드 테마</label>
+                    <select id="theme-select" class="w-full bg-slate-950/80 text-sm text-slate-100 rounded-xl px-3 py-2 border border-indigo-950/80 focus:border-indigo-500 focus:outline-none transition cursor-pointer">
+                        <option value="animals">🐼 귀여운 동물들</option>
+                        <option value="food">🍕 맛있는 음식들</option>
+                        <option value="sports">⚽ 스포츠 & 운동</option>
+                        <option value="places">✈️ 가고싶은 여행지</option>
+                        <option value="faces">😎 재미있는 표정들</option>
+                    </select>
+                </div>
+
+                <!-- Difficulty Select -->
+                <div>
+                    <label class="block text-xs text-indigo-200 mb-1 font-semibold">난이도 설정</label>
+                    <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                        <button onclick="setDifficulty('easy')" id="diff-easy" class="py-2 px-1 rounded-xl font-bold border transition bg-slate-950/80 border-indigo-950 text-indigo-300">
+                            쉬움<br><span class="text-[10px] font-normal">(4x4, 8쌍)</span>
+                        </button>
+                        <button onclick="setDifficulty('medium')" id="diff-medium" class="py-2 px-1 rounded-xl font-bold border transition bg-slate-950/80 border-indigo-950 text-indigo-300">
+                            보통<br><span class="text-[10px] font-normal">(6x4, 12쌍)</span>
+                        </button>
+                        <button onclick="setDifficulty('hard')" id="diff-hard" class="py-2 px-1 rounded-xl font-bold border transition bg-slate-950/80 border-indigo-950 text-indigo-300">
+                            어려움<br><span class="text-[10px] font-normal">(6x6, 18쌍)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex flex-col gap-2 mt-2">
+                    <button id="btn-restart" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-indigo-600/20 active:scale-95 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-rotate-right"></i> 새 게임 시작
+                    </button>
+                    <button id="btn-sound" class="w-full bg-slate-950/50 hover:bg-slate-950/80 text-slate-300 font-bold py-2.5 px-4 rounded-xl border border-indigo-950 active:scale-95 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-volume-high" id="sound-icon"></i> <span id="sound-text">효과음 켜짐</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- High Score Section -->
+            <div class="bg-slate-900/60 backdrop-blur-md p-5 rounded-2xl border border-indigo-950/60 shadow-xl flex-grow flex flex-col gap-3 min-h-[180px]">
+                <h3 class="text-sm font-bold text-indigo-300 border-b border-indigo-950/40 pb-2 flex items-center justify-between">
+                    <span class="flex items-center gap-2">
+                        <i class="fa-solid fa-trophy text-amber-400"></i> 명예의 전당
+                    </span>
+                    <button onclick="clearHighScores()" class="text-[10px] text-rose-400 hover:underline">기록 초기화</button>
+                </h3>
+                <div id="high-scores-list" class="flex flex-col gap-2 overflow-y-auto max-h-[160px] text-xs">
+                    <!-- High Score Items go here via JS -->
+                    <div class="text-center text-slate-400 py-4 italic">아직 기록이 없습니다.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Grid Board -->
+        <div class="w-full lg:w-3/4 flex flex-col justify-between items-center bg-slate-900/30 backdrop-blur-md p-4 sm:p-6 rounded-3xl border border-indigo-950/40 shadow-inner min-h-[400px]">
+            <!-- Grid element with responsive sizing depending on rows/cols -->
+            <div id="game-grid" class="grid gap-3 sm:gap-4 w-full h-full max-w-[650px] mx-auto justify-center items-center">
+                <!-- Cards dynamically loaded here -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full max-w-4xl text-center text-[11px] text-indigo-400/60 py-4 border-t border-indigo-950/20 mt-4 flex flex-col sm:flex-row justify-between gap-2">
+        <p>&copy; 2026 기억력 카드 매칭 마스터. All rights reserved.</p>
+        <p>기억력 향상과 두뇌 단련을 위한 가벼운 뒤집기 퍼즐 게임</p>
+    </footer>
+
+    <!-- Custom Modal: Victory / Game Over -->
+    <div id="win-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-gradient-to-b from-indigo-950 to-slate-900 border border-indigo-500/30 p-8 rounded-3xl max-w-md w-full text-center shadow-2xl relative overflow-hidden transform scale-90 transition-transform duration-300">
+            <!-- Sparkle top effect -->
+            <div class="absolute -top-10 -left-10 w-40 h-40 bg-indigo-500/20 rounded-full blur-3xl"></div>
+            <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-pink-500/20 rounded-full blur-3xl"></div>
+            
+            <div class="relative z-10">
+                <div class="w-20 h-20 bg-gradient-to-tr from-amber-400 to-yellow-300 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/30 animate-bounce">
+                    <i class="fa-solid fa-crown text-4xl text-slate-900"></i>
+                </div>
+                
+                <h2 class="text-3xl font-black text-white tracking-tight mb-2">클리어 성공! 🎉</h2>
+                <p class="text-indigo-200 text-sm mb-6">엄청난 기억력이시네요! 최고 기록을 확인하세요.</p>
+                
+                <!-- Match Statistics -->
+                <div class="bg-slate-950/60 rounded-2xl p-4 border border-indigo-950/60 flex flex-col gap-3 mb-6">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-indigo-300 flex items-center gap-1.5"><i class="fa-regular fa-clock"></i> 소요 시간</span>
+                        <span id="modal-time" class="text-sm font-bold text-emerald-400 font-mono">00:00</span>
+                    </div>
+                    <div class="flex justify-between items-center border-t border-indigo-950/40 pt-2">
+                        <span class="text-xs text-indigo-300 flex items-center gap-1.5"><i class="fa-solid fa-shoe-prints rotate-[-90deg]"></i> 총 이동 횟수</span>
+                        <span id="modal-moves" class="text-sm font-bold text-amber-400 font-mono">0회</span>
+                    </div>
+                    <div class="flex justify-between items-center border-t border-indigo-950/40 pt-2">
+                        <span class="text-xs text-indigo-300 flex items-center gap-1.5"><i class="fa-solid fa-star"></i> 최종 스코어</span>
+                        <span id="modal-score" class="text-sm font-bold text-pink-400 font-mono">0점</span>
+                    </div>
+                </div>
+
+                <!-- Record Submission Form -->
+                <div class="mb-6 text-left">
+                    <label class="block text-xs font-bold text-indigo-300 mb-1.5">명예의 전당 이름 등록</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="player-name" maxlength="10" placeholder="닉네임 입력 (최대 10자)" class="flex-grow bg-slate-950/80 border border-indigo-950 text-slate-100 px-4 py-2.5 rounded-xl text-sm focus:outline-none focus:border-indigo-500">
+                        <button onclick="submitScore()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition active:scale-95">등록</button>
+                    </div>
+                    <p id="submit-msg" class="text-[10px] text-emerald-400 mt-1 hidden">기록이 성공적으로 저장되었습니다!</p>
+                </div>
+
+                <!-- Close & Replay Buttons -->
+                <div class="flex gap-3">
+                    <button id="modal-close" class="flex-1 bg-slate-950/60 hover:bg-slate-950/90 text-slate-300 border border-indigo-950 font-bold py-3 rounded-xl text-sm transition active:scale-95">닫기</button>
+                    <button id="modal-restart" class="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-indigo-600/30 active:scale-95">다시 도전</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Background Canvas for confetti/particle effects when winning -->
+    <canvas id="canvas-confetti" class="fixed inset-0 pointer-events-none z-40 w-full h-full"></canvas>
+
+    <script>
+        // --- 1. GAME CONSTANTS & DATA ---
+        const CARDS_DATA = {
+            animals: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦆'],
+            food: ['🍎', '🍌', '🍉', '🍇', '🍓', '🍒', '🍑', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🌽', '🍟', '🍕', '🍰'],
+            sports: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🎱', '🪀', '🏓', '🏸', '🏒', '⛳', '🏹', '🎣', '🥊', '🛹'],
+            places: ['🏔️', '🌋', '🏕️', '🏖️', '🏜️', '🏝️', '🏠', '🏗️', '🕌', '⛩️', '🗽', '🗼', '🏰', '🎡', '🎢', '🚢', '✈️', '🚂'],
+            faces: ['😀', '🤣', '😇', '😍', '🤪', '🤩', '🥳', '😎', '🧐', '😴', '😷', '🤯', '🤠', '👽', '🤖', '👾', '🐱‍👓', '👻']
+        };
+
+        const GRID_CONFIG = {
+            easy: { rows: 4, cols: 4, pairs: 8 },
+            medium: { rows: 6, cols: 4, pairs: 12 },
+            hard: { rows: 6, cols: 6, pairs: 18 }
+        };
+
+        // --- 2. STATE MANAGEMENT ---
+        let currentDifficulty = 'easy';
+        let currentTheme = 'animals';
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let totalPairs = 8;
+        let moves = 0;
+        let combo = 0;
+        let timerInterval = null;
+        let secondsElapsed = 0;
+        let gameActive = false;
+        let lockBoard = false;
+        let soundEnabled = true;
+
+        // --- 3. AUDIO SYNTHESIS (Tone.js) ---
+        // Creating dynamic sound effects to prevent external asset reliance
+        let synth = null;
+        let polySynth = null;
+
+        function initSynth() {
+            if (!synth) {
+                synth = new Tone.Synth({
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.05, decay: 0.1, sustain: 0.3, release: 0.4 }
+                }).toDestination();
+                
+                polySynth = new Tone.PolySynth(Tone.Synth).toDestination();
+                polySynth.set({
+                    envelope: { attack: 0.02, decay: 0.1, sustain: 0.2, release: 0.4 }
+                });
+            }
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            try {
+                // Ensure audio context is run
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                initSynth();
+
+                if (type === 'flip') {
+                    // Quick cheerful flip sound
+                    synth.triggerAttackRelease("C5", "16n");
+                } else if (type === 'match') {
+                    // Perfect harmonic interval (Major triad)
+                    polySynth.triggerAttackRelease(["C5", "E5", "G5"], "8n");
+                } else if (type === 'mismatch') {
+                    // Dissonant sound indicating error
+                    synth.triggerAttackRelease("B3", "8n");
+                } else if (type === 'win') {
+                    // Ascending major sequence
+                    const now = Tone.now();
+                    synth.triggerAttackRelease("C5", "16n", now);
+                    synth.triggerAttackRelease("E5", "16n", now + 0.1);
+                    synth.triggerAttackRelease("G5", "16n", now + 0.2);
+                    synth.triggerAttackRelease("C6", "8n", now + 0.3);
+                } else if (type === 'combo') {
+                    // High pitch ping for active combo
+                    synth.triggerAttackRelease("C6", "32n");
+                }
+            } catch (e) {
+                console.warn('Audio play failed: ', e);
+            }
+        }
+
+        // --- STREAMING_CHUNK: Core board loading and shuffle algorithms... ---
+        // --- 4. BOARD CREATION & LOGIC ---
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function setDifficulty(level) {
+            if (gameActive && moves > 0) {
+                if (!confirm("현재 진행 중인 게임이 초기화됩니다. 변경하시겠습니까?")) {
+                    return;
+                }
+            }
+            currentDifficulty = level;
+            
+            // Highlight current selection
+            ['easy', 'medium', 'hard'].forEach(l => {
+                const btn = document.getElementById(`diff-${l}`);
+                if (l === level) {
+                    btn.classList.remove('bg-slate-950/80', 'border-indigo-950', 'text-indigo-300');
+                    btn.classList.add('bg-indigo-600', 'border-indigo-500', 'text-white');
+                } else {
+                    btn.classList.add('bg-slate-950/80', 'border-indigo-950', 'text-indigo-300');
+                    btn.classList.remove('bg-indigo-600', 'border-indigo-500', 'text-white');
+                }
+            });
+
+            resetGame();
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            secondsElapsed = 0;
+            document.getElementById('timer').textContent = "00:00";
+            timerInterval = setInterval(() => {
+                secondsElapsed++;
+                const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+                const secs = String(secondsElapsed % 60).padStart(2, '0');
+                document.getElementById('timer').textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        function resetGame() {
+            stopTimer();
+            gameActive = false;
+            lockBoard = false;
+            moves = 0;
+            combo = 0;
+            matchedPairs = 0;
+            flippedCards = [];
+
+            const config = GRID_CONFIG[currentDifficulty];
+            totalPairs = config.pairs;
+
+            // Reset score displays
+            document.getElementById('moves').textContent = "0";
+            document.getElementById('score').textContent = `0/${totalPairs}`;
+            document.getElementById('timer').textContent = "00:00";
+            document.getElementById('combo').textContent = "0🔥";
+
+            // Grab and prepare theme emoji set
+            currentTheme = document.getElementById('theme-select').value;
+            const chosenThemeEmojis = CARDS_DATA[currentTheme];
+            
+            // Slice appropriate count of symbols & duplicate them
+            const selectedSymbols = chosenThemeEmojis.slice(0, totalPairs);
+            const gameSymbols = [...selectedSymbols, ...selectedSymbols];
+            
+            // Shuffle
+            shuffle(gameSymbols);
+
+            // Rebuild GRID DOM
+            const gridEl = document.getElementById('game-grid');
+            gridEl.innerHTML = '';
+
+            // Apply specific grid classes to align perfectly
+            gridEl.style.gridTemplateColumns = `repeat(${config.cols}, minmax(0, 1fr))`;
+            
+            // Adjust card sizing based on grid sizing
+            const heightClass = currentDifficulty === 'hard' ? 'h-16 sm:h-24' : 'h-24 sm:h-32';
+            const textClass = currentDifficulty === 'hard' ? 'text-2xl sm:text-4xl' : 'text-3xl sm:text-5xl';
+
+            // Generate card elements
+            gameSymbols.forEach((symbol, index) => {
+                const card = document.createElement('div');
+                card.className = `card-container ${heightClass} w-full cursor-pointer relative`;
+                card.dataset.index = index;
+                card.dataset.symbol = symbol;
+
+                card.innerHTML = `
+                    <div class="card-inner w-full h-full relative duration-500 shadow-lg">
+                        <!-- Front (Shown when flipped, containing the icon) -->
+                        <div class="card-front w-full h-full flex items-center justify-center bg-slate-800 border-2 border-indigo-500/50 rounded-2xl ${textClass} select-none shadow-indigo-500/10 shadow-lg">
+                            ${symbol}
+                        </div>
+                        <!-- Back (Cover style hidden/back face shown by default) -->
+                        <div class="card-back w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-950 border-2 border-indigo-950 hover:border-indigo-400 rounded-2xl select-none relative overflow-hidden">
+                            <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(79,70,229,0.15)_0%,transparent_70%)]"></div>
+                            <span class="text-indigo-400/80 font-bold text-lg sm:text-xl relative z-10 font-mono">?</span>
+                        </div>
+                    </div>
+                `;
+
+                card.addEventListener('click', () => handleCardClick(card));
+                gridEl.appendChild(card);
+            });
+
+            // Refresh High Score list layout
+            loadHighScores();
+        }
+
+        // --- STREAMING_CHUNK: Managing flips, matching criteria, and scoring metrics... ---
+        function handleCardClick(card) {
+            // Prevent execution if locked, already flipped, or already matched
+            if (lockBoard || card.classList.contains('card-flipped') || card.classList.contains('card-matched')) return;
+
+            // Start timer upon the very first action
+            if (!gameActive) {
+                gameActive = true;
+                startTimer();
+                initSynth(); // Ready audio context on user interaction
+            }
+
+            // Flip the card visually
+            card.classList.add('card-flipped');
+            playSound('flip');
+            flippedCards.push(card);
+
+            // Check if two cards are flipped
+            if (flippedCards.length === 2) {
+                moves++;
+                document.getElementById('moves').textContent = moves;
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            const [card1, card2] = flippedCards;
+            const isMatch = card1.dataset.symbol === card2.dataset.symbol;
+
+            if (isMatch) {
+                handleMatch(card1, card2);
+            } else {
+                handleMismatch(card1, card2);
+            }
+        }
+
+        function handleMatch(card1, card2) {
+            card1.classList.add('card-matched');
+            card2.classList.add('card-matched');
+
+            // Apply special subtle pulse visual class on matched cards
+            setTimeout(() => {
+                card1.querySelector('.card-front').classList.add('border-emerald-500/70', 'bg-slate-900');
+                card2.querySelector('.card-front').classList.add('border-emerald-500/70', 'bg-slate-900');
+            }, 250);
+
+            matchedPairs++;
+            combo++;
+            
+            // Manage combo notifications & bonuses
+            if (combo > 1) {
+                playSound('combo');
+                const comboEl = document.getElementById('combo');
+                comboEl.classList.add('scale-125', 'text-amber-400');
+                setTimeout(() => comboEl.classList.remove('scale-125', 'text-amber-400'), 300);
+            } else {
+                playSound('match');
+            }
+
+            document.getElementById('combo').textContent = `${combo}🔥`;
+            document.getElementById('score').textContent = `${matchedPairs}/${totalPairs}`;
+            
+            flippedCards = [];
+
+            // Check if game is completed
+            if (matchedPairs === totalPairs) {
+                handleWin();
+            }
+        }
+
+        function handleMismatch(card1, card2) {
+            lockBoard = true;
+            combo = 0; // Reset consecutive combo back to 0
+            document.getElementById('combo').textContent = "0🔥";
+            playSound('mismatch');
+
+            // Temporarily border them red for feedback
+            card1.querySelector('.card-front').classList.add('border-rose-500/70');
+            card2.querySelector('.card-front').classList.add('border-rose-500/70');
+
+            setTimeout(() => {
+                card1.classList.remove('card-flipped');
+                card2.classList.remove('card-flipped');
+                
+                // Reset border styling
+                card1.querySelector('.card-front').classList.remove('border-rose-500/70');
+                card2.querySelector('.card-front').classList.remove('border-rose-500/70');
+                
+                flippedCards = [];
+                lockBoard = false;
+            }, 1000);
+        }
+
+        // --- STREAMING_CHUNK: Writing high-score storage and celebratory particles... ---
+        // --- 5. HIGH SCORES AND LOCAL STORAGE ---
+        function calculateScore() {
+            // Formula: Higher score for less seconds, less moves, and extra combo multipliers
+            const difficultyMultiplier = currentDifficulty === 'easy' ? 1000 : currentDifficulty === 'medium' ? 2500 : 5000;
+            const timePenalty = secondsElapsed * 8;
+            const movesPenalty = moves * 15;
+            const finalScore = Math.max(100, difficultyMultiplier - timePenalty - movesPenalty);
+            return finalScore;
+        }
+
+        function loadHighScores() {
+            const listEl = document.getElementById('high-scores-list');
+            const scores = JSON.parse(localStorage.getItem('memory_game_scores') || '[]');
+            
+            // Filter list to current difficulty to keep competitive categories
+            const categoryScores = scores
+                .filter(s => s.difficulty === currentDifficulty)
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 5);
+
+            if (categoryScores.length === 0) {
+                listEl.innerHTML = `<div class="text-center text-slate-500 py-4 italic">등록된 기록이 없습니다.<br>도전하여 1위가 되어보세요!</div>`;
+                return;
+            }
+
+            listEl.innerHTML = categoryScores.map((s, index) => {
+                const medals = ['🥇', '🥈', '🥉', '✨', '⚡'];
+                return `
+                    <div class="flex items-center justify-between bg-slate-950/40 border border-indigo-950/40 rounded-xl px-3 py-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm">${medals[index] || '⭐'}</span>
+                            <span class="font-bold text-slate-200">${s.name}</span>
+                        </div>
+                        <div class="text-right font-mono">
+                            <span class="text-pink-400 font-bold">${s.score}점</span>
+                            <span class="text-slate-500 block text-[9px]">${s.time} | ${s.moves}회</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function submitScore() {
+            const nameInput = document.getElementById('player-name');
+            const name = nameInput.value.trim() || '무명 플레이어';
+            
+            const scores = JSON.parse(localStorage.getItem('memory_game_scores') || '[]');
+            const finalScore = calculateScore();
+            
+            const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+            const secs = String(secondsElapsed % 60).padStart(2, '0');
+
+            const record = {
+                name: name,
+                difficulty: currentDifficulty,
+                score: finalScore,
+                time: `${mins}:${secs}`,
+                moves: moves,
+                date: new Date().toLocaleDateString()
+            };
+
+            scores.push(record);
+            localStorage.setItem('memory_game_scores', JSON.stringify(scores));
+            
+            document.getElementById('submit-msg').classList.remove('hidden');
+            nameInput.disabled = true;
+            document.querySelector('#player-name + button').disabled = true;
+            
+            loadHighScores();
+        }
+
+        function clearHighScores() {
+            if (confirm("정말로 모든 명예의 전당 기록을 초기화하시겠습니까?")) {
+                localStorage.removeItem('memory_game_scores');
+                loadHighScores();
+            }
+        }
+
+        // --- STREAMING_CHUNK: Implementing winning visual triggers & Confetti... ---
+        // --- 6. WIN CELEBRATION (CONFETTI SYSTEM) ---
+        const canvas = document.getElementById('canvas-confetti');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let confettiInterval = null;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * -canvas.height - 20;
+                this.size = Math.random() * 8 + 6;
+                this.color = `hsl(${Math.random() * 360}, 85%, 60%)`;
+                this.speed = Math.random() * 4 + 3;
+                this.angle = Math.random() * Math.PI * 2;
+                this.rotationSpeed = Math.random() * 0.1 - 0.05;
+                this.wobble = Math.random() * 2;
+            }
+            update() {
+                this.y += this.speed;
+                this.x += Math.sin(this.angle) * 0.5;
+                this.angle += this.rotationSpeed;
+                
+                // Recycle particle
+                if (this.y > canvas.height) {
+                    this.y = -20;
+                    this.x = Math.random() * canvas.width;
+                }
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+                ctx.restore();
+            }
+        }
+
+        function setupConfetti() {
+            particles = [];
+            for (let i = 0; i < 120; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animateConfetti() {
+            if (!gameActive && matchedPairs === totalPairs) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach(p => {
+                    p.update();
+                    p.draw();
+                });
+                requestAnimationFrame(animateConfetti);
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function handleWin() {
+            stopTimer();
+            playSound('win');
+            setupConfetti();
+            animateConfetti();
+
+            // Setup and trigger modal window values
+            const finalScore = calculateScore();
+            const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+            const secs = String(secondsElapsed % 60).padStart(2, '0');
+
+            document.getElementById('modal-time').textContent = `${mins}:${secs}`;
+            document.getElementById('modal-moves').textContent = `${moves}회`;
+            document.getElementById('modal-score').textContent = `${finalScore}점`;
+            
+            // Reset input values inside score submission
+            const nameInput = document.getElementById('player-name');
+            nameInput.value = '';
+            nameInput.disabled = false;
+            document.querySelector('#player-name + button').disabled = false;
+            document.getElementById('submit-msg').classList.add('hidden');
+
+            // Show custom Modal with CSS transition fade in
+            const modal = document.getElementById('win-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('div').classList.remove('scale-90');
+            }, 50);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('win-modal');
+            modal.classList.add('opacity-0');
+            modal.querySelector('div').classList.add('scale-90');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+            
+            // Turn off confetti rendering loop
+            matchedPairs = 0; 
+        }
+
+        // --- STREAMING_CHUNK: Setting up global interaction event listeners... ---
+        // --- 7. EVENT LISTENERS AND INITIALIZATION ---
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            resetGame();
+        });
+
+        document.getElementById('theme-select').addEventListener('change', () => {
+            resetGame();
+        });
+
+        document.getElementById('modal-close').addEventListener('click', closeModal);
+        document.getElementById('modal-restart').addEventListener('click', () => {
+            closeModal();
+            resetGame();
+        });
+
+        // Toggle sound control
+        document.getElementById('btn-sound').addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            const text = document.getElementById('sound-text');
+            
+            if (soundEnabled) {
+                icon.className = "fa-solid fa-volume-high";
+                text.textContent = "효과음 켜짐";
+            } else {
+                icon.className = "fa-solid fa-volume-xmark text-rose-400";
+                text.textContent = "효과음 꺼짐";
+            }
+        });
+
+        // Window load starting actions
+        window.onload = function () {
+            setDifficulty('easy'); // Sets difficulty which auto triggers board generation
+        };
+    </script>
+</body>
+</html>
